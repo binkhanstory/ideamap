@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>아이디어 맵 메이커</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<style>
+  :root {
+    --bg: #FAFAF8;
+    --bg2: #F1EFE8;
+    --bg3: #E8E6DD;
+    --surface: #FFFFFF;
+    --border: rgba(0,0,0,0.1);
+    --border2: rgba(0,0,0,0.18);
+    --text: #1a1a18;
+    --text2: #5F5E5A;
+    --text3: #888780;
+    --radius: 10px;
+    --radius-sm: 7px;
+    --amber-fill: #FAEEDA; --amber-stroke: #BA7517; --amber-text: #633806;
+    --coral-fill: #FAECE7; --coral-stroke: #993C1D; --coral-text: #4A1B0C;
+    --teal-fill:  #E1F5EE; --teal-stroke:  #0F6E56; --teal-text:  #04342C;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1117; --bg2: #181b24; --bg3: #21252f;
+      --surface: #1c2030;
+      --border: rgba(255,255,255,0.1); --border2: rgba(255,255,255,0.18);
+      --text: #e8eaf0; --text2: #9096a8; --text3: #5f6578;
+      --amber-fill:#412402; --amber-stroke:#FAC775; --amber-text:#FAC775;
+      --coral-fill:#4A1B0C; --coral-stroke:#F0997B; --coral-text:#F0997B;
+      --teal-fill:#04342C;  --teal-stroke:#5DCAA5; --teal-text:#5DCAA5;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Apple SD Gothic Neo', sans-serif; }
+  body { display: flex; flex-direction: column; min-height: 100vh; }
+
+  /* ── API KEY BANNER ── */
+  #api-banner {
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  #api-banner label { font-size: 12px; color: var(--text2); white-space: nowrap; }
+  #api-key-input {
+    flex: 1; min-width: 240px; max-width: 420px;
+    padding: 7px 12px; border-radius: var(--radius-sm);
+    border: 1px solid var(--border2);
+    background: var(--surface); color: var(--text);
+    font-size: 13px; font-family: monospace; outline: none;
+    transition: border-color 0.15s;
+  }
+  #api-key-input:focus { border-color: #1D9E75; }
+  #api-save-btn {
+    padding: 7px 16px; border-radius: var(--radius-sm);
+    border: none; background: var(--text); color: var(--bg);
+    font-size: 12px; cursor: pointer; transition: opacity 0.15s; white-space: nowrap;
+  }
+  #api-save-btn:hover { opacity: 0.78; }
+  .api-status { font-size: 11px; padding: 4px 10px; border-radius: 20px; white-space: nowrap; }
+  .api-status.ok { background: #E1F5EE; color: #0F6E56; }
+  .api-status.no { background: #FAECE7; color: #993C1D; }
+  @media (prefers-color-scheme: dark) {
+    .api-status.ok { background: #04342C; color: #5DCAA5; }
+    .api-status.no { background: #4A1B0C; color: #F0997B; }
+  }
+
+  /* ── MAIN LAYOUT ── */
+  #app { display: flex; flex-direction: column; flex: 1; padding: 16px; gap: 12px; max-width: 1200px; margin: 0 auto; width: 100%; }
+
+  /* ── PANEL ── */
+  #panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
+  .ph { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; flex-wrap: wrap; gap: 8px; }
+  .ptitle { font-size: 16px; font-weight: 600; letter-spacing: -0.3px; }
+  .tabs { display: inline-flex; background: var(--bg2); border-radius: var(--radius-sm); padding: 3px; gap: 3px; }
+  .tab { padding: 6px 13px; border-radius: 5px; border: none; background: transparent; color: var(--text2); font-size: 12px; cursor: pointer; transition: all 0.15s; white-space: nowrap; font-family: inherit; }
+  .tab.active { background: var(--surface); color: var(--text); border: 1px solid var(--border); font-weight: 500; }
+  .irow { display: flex; gap: 8px; }
+  #mi { flex: 1; padding: 9px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border2); background: var(--bg2); color: var(--text); font-size: 14px; font-family: inherit; outline: none; transition: border-color 0.15s; }
+  #mi:focus { border-color: #1D9E75; background: var(--surface); }
+  #mi::placeholder { color: var(--text3); }
+  .gbtn { padding: 9px 20px; background: var(--text); color: var(--bg); border: none; border-radius: var(--radius-sm); font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap; transition: opacity 0.15s; font-family: inherit; }
+  .gbtn:disabled { opacity: 0.35; cursor: not-allowed; }
+  .gbtn:hover:not(:disabled) { opacity: 0.78; }
+  .cbtn { padding: 9px 14px; background: transparent; color: var(--text2); border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 13px; cursor: pointer; transition: all 0.15s; font-family: inherit; }
+  .cbtn:hover { color: var(--text); border-color: var(--border2); }
+  #presets { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .chip { padding: 5px 12px; background: var(--bg2); border: 1px solid var(--border); border-radius: 20px; font-size: 12px; color: var(--text2); cursor: pointer; transition: all 0.15s; white-space: nowrap; }
+  .chip:hover { background: var(--bg3); color: var(--text); border-color: var(--border2); transform: translateY(-1px); }
+  #hint { font-size: 12px; color: var(--text3); margin-top: 9px; }
+
+  /* ── GRAPH ── */
+  #ga { position: relative; flex: 1; min-height: 500px; background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  #ga::before { content: ''; position: absolute; inset: 0; background-image: radial-gradient(circle, var(--border) 1px, transparent 1px); background-size: 30px 30px; pointer-events: none; }
+  #gsvg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+
+  /* ── EMPTY STATE ── */
+  #es { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); text-align: center; pointer-events: none; user-select: none; }
+  .est { font-size: 16px; font-weight: 500; color: var(--text3); margin-bottom: 8px; }
+  .ess { font-size: 13px; color: var(--text3); line-height: 1.7; }
+
+  /* ── LOADING ── */
+  #li { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); background: var(--surface); border: 1px solid var(--border2); border-radius: var(--radius); padding: 14px 22px; display: none; align-items: center; gap: 12px; font-size: 13px; color: var(--text2); z-index: 20; box-shadow: 0 4px 24px rgba(0,0,0,0.08); }
+  #li.show { display: flex; }
+  .sp { width: 16px; height: 16px; border: 2px solid var(--border2); border-top-color: var(--text); border-radius: 50%; animation: spin 0.75s linear infinite; flex-shrink: 0; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── STATS ── */
+  #sb { position: absolute; top: 14px; left: 14px; display: none; gap: 7px; z-index: 5; }
+  #sb.show { display: flex; }
+  .sbadge { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 5px 11px; font-size: 11px; color: var(--text2); display: flex; align-items: center; gap: 6px; }
+  .sdot { width: 7px; height: 7px; border-radius: 50%; }
+
+  /* ── LEGEND ── */
+  #leg { position: absolute; bottom: 16px; right: 16px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 11px 15px; z-index: 5; }
+  .li2 { display: flex; align-items: center; gap: 9px; font-size: 12px; color: var(--text2); margin-bottom: 7px; }
+  .li2:last-child { margin-bottom: 0; }
+  .ldot { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0; }
+
+  /* ── ZOOM CONTROLS ── */
+  #zc { position: absolute; bottom: 16px; left: 16px; display: flex; flex-direction: column; gap: 5px; z-index: 5; }
+  .zbtn { width: 32px; height: 32px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface); color: var(--text2); font-size: 15px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; line-height: 1; }
+  .zbtn:hover { color: var(--text); border-color: var(--border2); }
+  .zbtn.exp { font-size: 13px; margin-top: 5px; color: #0F6E56; border-color: #0F6E56; }
+  .zbtn.exp:hover { background: #E1F5EE; }
+
+  /* ── NODE MENU ── */
+  #nm { position: absolute; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px; display: none; flex-direction: column; gap: 4px; z-index: 30; min-width: 152px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+  #nm.show { display: flex; }
+  #nml { font-size: 13px; font-weight: 500; padding: 2px 6px 8px; border-bottom: 1px solid var(--border); margin-bottom: 2px; color: var(--text); }
+  .mbtn { padding: 8px 10px; border-radius: var(--radius-sm); border: none; font-family: inherit; font-size: 12px; cursor: pointer; text-align: left; transition: background 0.1s; }
+  .mbe { background: var(--teal-fill); color: var(--teal-text); }
+  .mbe:hover { filter: brightness(0.93); }
+  .mbd { background: var(--coral-fill); color: var(--coral-text); }
+  .mbd:hover { filter: brightness(0.93); }
+
+  /* ── ADD NODE INPUT ── */
+  #aip { position: absolute; display: none; z-index: 25; }
+  #aip.show { display: block; }
+  #aip-inner { background: var(--surface); border: 1px solid var(--border2); border-radius: var(--radius-sm); padding: 7px; display: flex; gap: 5px; align-items: center; box-shadow: 0 4px 16px rgba(0,0,0,0.1); }
+  #ain { font-size: 12px; width: 135px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 5px; background: var(--bg2); color: var(--text); font-family: inherit; outline: none; }
+  #ain:focus { border-color: #1D9E75; }
+  .aibtn { padding: 6px 11px; border-radius: 5px; border: none; font-family: inherit; font-size: 12px; cursor: pointer; }
+  .aibtn-ok { background: var(--text); color: var(--bg); }
+  .aibtn-cn { background: transparent; color: var(--text2); border: 1px solid var(--border); }
+  #aip-hint { font-size: 10px; color: var(--text3); margin-top: 4px; padding: 0 2px; }
+
+  /* ── NODE SVG CLASSES ── */
+  circle.cn-core { fill: var(--amber-fill); stroke: var(--amber-stroke); }
+  circle.cn-user { fill: var(--coral-fill); stroke: var(--coral-stroke); }
+  circle.cn-ai   { fill: var(--teal-fill);  stroke: var(--teal-stroke);  }
+  text.tl-core { fill: var(--amber-text); }
+  text.tl-user { fill: var(--coral-text); }
+  text.tl-ai   { fill: var(--teal-text);  }
+</style>
+</head>
+<body>
+
+<!-- API KEY 배너 -->
+<div id="api-banner">
+  <label>🔑 Anthropic API Key</label>
+  <input id="api-key-input" type="password" placeholder="sk-ant-api03-...">
+  <button id="api-save-btn">저장</button>
+  <span class="api-status no" id="api-status">키 없음 — AI 기능 비활성화</span>
+  <span style="font-size:11px;color:#888">키는 브라우저 로컬에만 저장됩니다. <a href="https://console.anthropic.com/settings/keys" target="_blank" style="color:#1D9E75">키 발급 →</a></span>
+</div>
+
+<div id="app">
+  <!-- 입력 패널 -->
+  <div id="panel">
+    <div class="ph">
+      <span class="ptitle">🧠 아이디어 맵 메이커</span>
+      <div class="tabs">
+        <button class="tab active" data-mode="single">키워드 1개</button>
+        <button class="tab" data-mode="multi">멀티 키워드</button>
+        <button class="tab" data-mode="topic">주제·문장</button>
+      </div>
+    </div>
+    <div class="irow">
+      <input id="mi" type="text" placeholder="키워드를 입력하세요 (예: 퍼스널 브랜딩)">
+      <button class="gbtn" id="gbtn">맵 생성</button>
+      <button class="cbtn" id="clbtn">초기화</button>
+    </div>
+    <div id="presets"></div>
+    <div id="hint">키워드 하나를 입력하면 AI가 연관 개념들을 거미줄처럼 펼쳐드립니다.</div>
+  </div>
+
+  <!-- 그래프 영역 -->
+  <div id="ga">
+    <svg id="gsvg"></svg>
+    <div id="es">
+      <div class="est">아이디어를 입력하거나 프리셋을 선택하세요</div>
+      <div class="ess">빈 공간 더블클릭으로 노드를 직접 추가할 수 있습니다<br>우측 하단 ↓ 버튼으로 PNG 저장 가능합니다</div>
+    </div>
+    <div id="li"><div class="sp"></div><span>AI가 연관 개념을 분석 중...</span></div>
+    <div id="sb">
+      <div class="sbadge"><div class="sdot" style="background:#EF9F27"></div><span id="sc">0 핵심</span></div>
+      <div class="sbadge"><div class="sdot" style="background:#D85A30"></div><span id="su">0 내 입력</span></div>
+      <div class="sbadge"><div class="sdot" style="background:#1D9E75"></div><span id="sa">0 AI</span></div>
+    </div>
+    <div id="zc">
+      <button class="zbtn" id="bzi" title="확대">+</button>
+      <button class="zbtn" id="bzo" title="축소">−</button>
+      <button class="zbtn" id="bff" title="전체보기">⊡</button>
+      <button class="zbtn exp" id="bexp" title="PNG로 저장">↓</button>
+    </div>
+    <div id="leg">
+      <div class="li2"><div class="ldot" style="background:#EF9F27;outline:1.5px solid #BA7517;outline-offset:1px"></div>핵심 노드</div>
+      <div class="li2"><div class="ldot" style="background:#D85A30;outline:1.5px solid #993C1D;outline-offset:1px"></div>내 입력</div>
+      <div class="li2"><div class="ldot" style="background:#1D9E75;outline:1.5px solid #0F6E56;outline-offset:1px"></div>AI 추천</div>
+      <div class="li2" style="font-size:10px;color:var(--text3);margin-top:4px">클릭=옵션 · 드래그=이동 · 더블클릭=노드추가</div>
+    </div>
+    <div id="nm">
+      <div id="nml"></div>
+      <button class="mbtn mbe" id="mbe">✦ AI로 확장하기</button>
+      <button class="mbtn mbd" id="mbd">✕ 삭제</button>
+    </div>
+    <div id="aip">
+      <div id="aip-inner">
+        <input id="ain" type="text" placeholder="노드 이름 입력">
+        <button class="aibtn aibtn-ok" id="aok">추가</button>
+        <button class="aibtn aibtn-cn" id="acn">✕</button>
+      </div>
+      <div id="aip-hint">Enter=추가 · Esc=취소</div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── STATE ────────────────────────────────────────────
+let nodes=[], links=[], sim, svg, g, zb;
+let selNode=null, curMode='single', addNodePos={x:0,y:0};
+let API_KEY = localStorage.getItem('idea_map_api_key') || '';
+
+const NR = d => d.type==='core'?30:d.type==='user'?24:20;
+
+// ── PRESETS ──────────────────────────────────────────
+const PRESETS = {
+  single:[
+    {l:'퍼스널 브랜딩',v:'퍼스널 브랜딩'},{l:'AI 강의',v:'AI 강의'},{l:'창업 전략',v:'창업 전략'},
+    {l:'국밥 프랜차이즈',v:'국밥 프랜차이즈'},{l:'스레드 마케팅',v:'스레드 마케팅'},{l:'경제적 자유',v:'경제적 자유'}
+  ],
+  multi:[
+    {l:'강의+사업+마케팅',v:'AI강의, 사업전략, 마케팅'},{l:'블로그+유튜브+인스타',v:'블로그, 유튜브, 인스타그램'},
+    {l:'강의+전자책+컨설팅',v:'강의, 전자책, 컨설팅'},{l:'AI+브랜딩+수익',v:'AI도구, 브랜딩, 수익창출'}
+  ],
+  topic:[
+    {l:'AI강사 사업전략',v:'홈플러스 경험을 살린 AI 강사 사업 전략'},
+    {l:'국밥 프랜차이즈',v:'국밥 프랜차이즈 창업 전략과 마케팅 로드맵'},
+    {l:'크리에이터 수익',v:'경제적 자유를 위한 크리에이터 수익 전략'},
+    {l:'퍼스널 브랜딩 수익',v:'퍼스널 브랜딩으로 강의와 콘텐츠 수익 만들기'}
+  ]
+};
+const HINTS = {
+  single:'키워드 하나를 입력하면 AI가 연관 개념들을 거미줄처럼 펼쳐드립니다.',
+  multi:'키워드를 쉼표(,)로 구분해서 입력하세요. AI가 연결고리를 찾아드립니다.',
+  topic:'공부하거나 기획할 주제나 문장을 자유롭게 입력하세요.'
+};
+const PH = {
+  single:'키워드를 입력하세요 (예: 퍼스널 브랜딩)',
+  multi:'쉼표로 구분 (예: AI강의, 사업, 마케팅)',
+  topic:'주제 문장 (예: 홈플러스 경험을 살린 AI 강사 사업 전략)'
+};
+
+function renderPresets(mode) {
+  const wrap = document.getElementById('presets');
+  wrap.innerHTML = '';
+  PRESETS[mode].forEach(p => {
+    const c = document.createElement('span');
+    c.className = 'chip'; c.textContent = p.l;
+    c.addEventListener('click', () => {
+      document.getElementById('mi').value = p.v;
+      generateMap(p.v);
+    });
+    wrap.appendChild(c);
+  });
+}
+
+// ── API KEY ───────────────────────────────────────────
+function updateApiStatus() {
+  const st = document.getElementById('api-status');
+  if (API_KEY && API_KEY.startsWith('sk-')) {
+    st.textContent = '✓ API 키 등록됨 — AI 기능 활성화';
+    st.className = 'api-status ok';
+  } else {
+    st.textContent = '키 없음 — API 키를 입력하세요';
+    st.className = 'api-status no';
+  }
+}
+
+document.getElementById('api-save-btn').addEventListener('click', () => {
+  const val = document.getElementById('api-key-input').value.trim();
+  if (val) { API_KEY = val; localStorage.setItem('idea_map_api_key', val); }
+  document.getElementById('api-key-input').value = '';
+  updateApiStatus();
+});
+
+if (API_KEY) {
+  document.getElementById('api-key-input').placeholder = '저장된 키 있음 (변경하려면 입력)';
+}
+updateApiStatus();
+
+// ── AI API ───────────────────────────────────────────
+async function callAI(prompt) {
+  if (!API_KEY) throw new Error('API 키가 없습니다.');
+  const r = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': API_KEY,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({
+      model: 'claude-opus-4-5',
+      max_tokens: 1000,
+      system: `아이디어 맵 도우미. 순수 JSON만 반환. 마크다운/설명 절대 금지.
+형식: {"nodes":[{"id":"center","label":"핵심단어","type":"core"},{"id":"n1","label":"연관단어","type":"ai"}],"links":[{"source":"center","target":"n1","label":"연관"}]}
+규칙: label 2~6자 한국어, type은 core/user/ai, 노드 8~12개, 모든 노드 연결, 중복 label 금지`,
+      messages: [{ role: 'user', content: prompt }]
+    })
+  });
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({}));
+    throw new Error(err.error?.message || `API 오류 (${r.status})`);
+  }
+  const d = await r.json();
+  const t = d.content.find(c => c.type === 'text')?.text || '';
+  return JSON.parse(t.replace(/```json|```/g, '').trim());
+}
+
+// ── GRAPH ─────────────────────────────────────────────
+function initGraph() {
+  const a = document.getElementById('ga');
+  const W = a.clientWidth, H = a.clientHeight;
+  svg = d3.select('#gsvg').attr('width', W).attr('height', H);
+  zb = d3.zoom().scaleExtent([0.1, 5]).on('zoom', e => g.attr('transform', e.transform));
+  svg.call(zb);
+  svg.on('click', () => { hideMenu(); hideAddInput(); });
+  svg.on('dblclick', (e) => {
+    if (e.target.tagName === 'circle' || e.target.tagName === 'text') return;
+    e.stopPropagation();
+    const pt = d3.pointer(e, g.node());
+    const ar = document.getElementById('ga').getBoundingClientRect();
+    showAddInput(pt[0], pt[1], e.clientX - ar.left, e.clientY - ar.top);
+  });
+  g = svg.append('g');
+  g.append('g').attr('class', 'gl');
+  g.append('g').attr('class', 'gll');
+  g.append('g').attr('class', 'gn');
+  g.append('g').attr('class', 'glb');
+  svg.append('defs').append('marker')
+    .attr('id', 'arr').attr('viewBox', '0 -4 8 8').attr('refX', 8)
+    .attr('markerWidth', 5).attr('markerHeight', 5).attr('orient', 'auto')
+    .append('path').attr('d', 'M0,-4L8,0L0,4').attr('fill', '#B4B2A9');
+  sim = d3.forceSimulation()
+    .force('link', d3.forceLink().id(d => d.id).distance(130).strength(0.6))
+    .force('charge', d3.forceManyBody().strength(-360))
+    .force('center', d3.forceCenter(W / 2, H / 2))
+    .force('collide', d3.forceCollide(52))
+    .on('tick', tick);
+}
+
+function tick() {
+  g.select('.gl').selectAll('line')
+    .attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+    .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+  g.select('.gll').selectAll('text')
+    .attr('x', d => (d.source.x + d.target.x) / 2)
+    .attr('y', d => (d.source.y + d.target.y) / 2);
+  g.select('.gn').selectAll('circle').attr('cx', d => d.x).attr('cy', d => d.y);
+  g.select('.glb').selectAll('text').attr('x', d => d.x).attr('y', d => d.y + NR(d) + 14);
+}
+
+const lk = l => `${l.source?.id || l.source}::${l.target?.id || l.target}`;
+
+function render() {
+  const ls = g.select('.gl').selectAll('line').data(links, lk);
+  ls.enter().append('line').attr('stroke', '#B4B2A9').attr('stroke-width', 1.5)
+    .attr('marker-end', 'url(#arr)').attr('opacity', 0)
+    .transition().duration(500).attr('opacity', 1);
+  ls.exit().transition().duration(200).attr('opacity', 0).remove();
+
+  const lls = g.select('.gll').selectAll('text').data(links.filter(l => l.label), lk);
+  lls.enter().append('text').attr('text-anchor', 'middle').attr('font-size', '9px')
+    .attr('fill', '#888780').attr('font-family', 'inherit').text(d => d.label);
+  lls.exit().remove();
+
+  const ns = g.select('.gn').selectAll('circle').data(nodes, d => d.id);
+  ns.enter().append('circle').attr('r', 0).attr('cx', d => d.x || 0).attr('cy', d => d.y || 0)
+    .attr('class', d => `cn-${d.type}`).attr('stroke-width', d => d.type === 'core' ? 2.5 : 1.5)
+    .style('cursor', 'pointer')
+    .call(d3.drag()
+      .on('start', (e, d) => { if (!e.active) sim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; hideMenu(); hideAddInput(); })
+      .on('drag', (e, d) => { d.fx = e.x; d.fy = e.y; })
+      .on('end', (e, d) => { if (!e.active) sim.alphaTarget(0); d.fx = null; d.fy = null; }))
+    .on('click', (e, d) => { e.stopPropagation(); showMenu(e, d); })
+    .on('mouseover', function (e, d) { d3.select(this).transition().duration(150).attr('r', NR(d) * 1.2).attr('stroke-width', 2.5); })
+    .on('mouseout', function (e, d) { d3.select(this).transition().duration(150).attr('r', NR(d)).attr('stroke-width', d.type === 'core' ? 2.5 : 1.5); })
+    .transition().duration(500).attr('r', NR);
+  ns.exit().transition().duration(200).attr('r', 0).remove();
+
+  const tls = g.select('.glb').selectAll('text').data(nodes, d => d.id);
+  tls.enter().append('text').attr('text-anchor', 'middle')
+    .attr('font-size', d => d.type === 'core' ? '13px' : '11px')
+    .attr('font-weight', d => d.type === 'core' ? '600' : '400')
+    .attr('font-family', 'inherit')
+    .attr('class', d => `tl-${d.type}`)
+    .attr('opacity', 0).text(d => d.label)
+    .transition().duration(500).attr('opacity', 1);
+  tls.exit().remove();
+
+  sim.nodes(nodes);
+  sim.force('link').links(links);
+  sim.alpha(0.4).restart();
+  updateStats();
+  document.getElementById('es').style.display = nodes.length === 0 ? 'block' : 'none';
+  document.getElementById('sb').classList.toggle('show', nodes.length > 0);
+}
+
+// ── GENERATE / EXPAND ─────────────────────────────────
+async function generateMap(input) {
+  if (!API_KEY || !API_KEY.startsWith('sk-')) {
+    alert('상단에 Anthropic API 키를 먼저 입력해주세요.\nhttps://console.anthropic.com/settings/keys');
+    return;
+  }
+  setLoading(true);
+  let p = '';
+  if (curMode === 'single') p = `키워드 "${input}"를 중심으로 아이디어 맵 생성. 중심 노드 id "center" type "core", 나머지 type "ai".`;
+  else if (curMode === 'multi') { const kw = input.split(/[,，、\s]+/).filter(Boolean); p = `키워드들: ${kw.join(', ')}. 각 입력 키워드 type "user", 연결 노드 type "ai", 핵심 1개 type "core".`; }
+  else p = `주제: "${input}". 핵심 type "core", 주요개념 type "user", 세부연관 type "ai".`;
+  try {
+    const r = await callAI(p);
+    nodes = r.nodes.map(n => ({ id: n.id, label: n.label, type: n.type || 'ai' }));
+    links = r.links
+      .filter(l => nodes.find(n => n.id === l.source) && nodes.find(n => n.id === l.target))
+      .map(l => ({ source: l.source, target: l.target, label: l.label || '' }));
+    render();
+    setTimeout(fitView, 700);
+  } catch (e) { console.error(e); alert('오류: ' + e.message); }
+  finally { setLoading(false); }
+}
+
+async function expandNode(nd) {
+  hideMenu(); setLoading(true);
+  const p = `노드 "${nd.label}"(id:"${nd.id}")에서 뻗어나오는 연관 개념 5~7개 생성. 새 노드 type "ai". source "${nd.id}" 참조.`;
+  try {
+    const r = await callAI(p);
+    const eids = new Set(nodes.map(n => n.id));
+    r.nodes.forEach(n => { if (!eids.has(n.id)) nodes.push({ id: n.id, label: n.label, type: 'ai' }); });
+    const elk = new Set(links.map(lk));
+    r.links.forEach(l => {
+      const s = l.source === nd.id ? nd.id : (nodes.find(n => n.id === l.source)?.id);
+      const t = nodes.find(n => n.id === l.target)?.id;
+      if (s && t && !elk.has(`${s}::${t}`)) links.push({ source: s, target: t, label: l.label || '' });
+    });
+    r.nodes.forEach(n => { if (!links.find(l => (l.target?.id || l.target) === n.id)) links.push({ source: nd.id, target: n.id, label: '연관' }); });
+    render();
+  } catch (e) { console.error(e); alert('확장 오류: ' + e.message); }
+  finally { setLoading(false); }
+}
+
+function deleteNode(nd) {
+  hideMenu();
+  nodes = nodes.filter(n => n.id !== nd.id);
+  links = links.filter(l => (l.source?.id || l.source) !== nd.id && (l.target?.id || l.target) !== nd.id);
+  render();
+}
+
+function addManualNode(label, x, y) {
+  if (!label.trim()) return;
+  nodes.push({ id: 'u' + Date.now(), label: label.trim(), type: 'user', x, y });
+  render();
+  hideAddInput();
+}
+
+// ── PNG EXPORT ────────────────────────────────────────
+async function exportPNG() {
+  if (!nodes.length) { alert('맵을 먼저 생성하세요.'); return; }
+  const svgEl = document.getElementById('gsvg');
+  try {
+    const b = g.node().getBBox();
+    const pad = 60;
+    const vw = Math.max(500, b.width + pad * 2), vh = Math.max(400, b.height + pad * 2);
+    const clone = svgEl.cloneNode(true);
+    clone.setAttribute('width', vw); clone.setAttribute('height', vh);
+    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    const cg = clone.querySelector('g');
+    if (cg) cg.setAttribute('transform', `translate(${pad - b.x},${pad - b.y})`);
+    const colorMap = {
+      'cn-core': { fill: '#FAEEDA', stroke: '#BA7517' },
+      'cn-user': { fill: '#FAECE7', stroke: '#993C1D' },
+      'cn-ai':   { fill: '#E1F5EE', stroke: '#0F6E56' }
+    };
+    const textMap = { 'tl-core': '#633806', 'tl-user': '#4A1B0C', 'tl-ai': '#04342C' };
+    Object.entries(colorMap).forEach(([cls, c]) => {
+      clone.querySelectorAll('.' + cls).forEach(el => { el.setAttribute('fill', c.fill); el.setAttribute('stroke', c.stroke); el.removeAttribute('class'); });
+    });
+    Object.entries(textMap).forEach(([cls, fill]) => {
+      clone.querySelectorAll('.' + cls).forEach(el => { el.setAttribute('fill', fill); el.removeAttribute('class'); });
+    });
+    const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    bg.setAttribute('x', '0'); bg.setAttribute('y', '0');
+    bg.setAttribute('width', vw); bg.setAttribute('height', vh); bg.setAttribute('fill', '#FAFAF8');
+    clone.insertBefore(bg, clone.firstChild);
+    const sty = document.createElementNS('http://www.w3.org/2000/svg', 'style');
+    sty.textContent = `text{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;}`;
+    clone.insertBefore(sty, clone.firstChild);
+    const svgStr = new XMLSerializer().serializeToString(clone);
+    const blob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      const sc = 2;
+      const cv = document.createElement('canvas');
+      cv.width = vw * sc; cv.height = vh * sc;
+      const ctx = cv.getContext('2d');
+      ctx.fillStyle = '#FAFAF8'; ctx.fillRect(0, 0, cv.width, cv.height);
+      ctx.scale(sc, sc); ctx.drawImage(img, 0, 0);
+      URL.revokeObjectURL(url);
+      const a = document.createElement('a');
+      a.download = '아이디어맵_' + new Date().toLocaleDateString('ko') + '.png';
+      a.href = cv.toDataURL('image/png'); a.click();
+    };
+    img.onerror = () => { const a = document.createElement('a'); a.download = '아이디어맵.svg'; a.href = url; a.click(); };
+    img.src = url;
+  } catch (e) { console.error(e); alert('내보내기 오류: ' + e.message); }
+}
+
+// ── UTILS ─────────────────────────────────────────────
+function setLoading(v) { document.getElementById('li').classList.toggle('show', v); document.getElementById('gbtn').disabled = v; }
+function updateStats() {
+  document.getElementById('sc').textContent = `${nodes.filter(n => n.type === 'core').length} 핵심`;
+  document.getElementById('su').textContent = `${nodes.filter(n => n.type === 'user').length} 내 입력`;
+  document.getElementById('sa').textContent = `${nodes.filter(n => n.type === 'ai').length} AI`;
+}
+function fitView() {
+  if (!nodes.length) return;
+  const a = document.getElementById('ga'); const W = a.clientWidth, H = a.clientHeight;
+  try {
+    const b = g.node().getBBox();
+    if (!b.width || !b.height) return;
+    const sc = 0.82 / Math.max(b.width / W, b.height / H);
+    const tx = (W - b.width * sc) / 2 - b.x * sc, ty = (H - b.height * sc) / 2 - b.y * sc;
+    svg.transition().duration(600).call(zb.transform, d3.zoomIdentity.translate(tx, ty).scale(sc));
+  } catch (e) {}
+}
+function clearAll() { nodes = []; links = []; render(); svg.call(zb.transform, d3.zoomIdentity); }
+
+function showMenu(e, nd) {
+  selNode = nd; const m = document.getElementById('nm');
+  document.getElementById('nml').textContent = nd.label; m.classList.add('show');
+  const ar = document.getElementById('ga').getBoundingClientRect();
+  let x = e.clientX - ar.left + 10, y = e.clientY - ar.top - 10;
+  if (x + 160 > ar.width) x = e.clientX - ar.left - 168;
+  if (y + 95 > ar.height) y = e.clientY - ar.top - 105;
+  m.style.left = Math.max(4, x) + 'px'; m.style.top = Math.max(4, y) + 'px';
+}
+function hideMenu() { document.getElementById('nm').classList.remove('show'); selNode = null; }
+
+function showAddInput(gx, gy, cx, cy) {
+  addNodePos = { x: gx, y: gy };
+  const aip = document.getElementById('aip'); aip.classList.add('show');
+  const ar = document.getElementById('ga').getBoundingClientRect();
+  let x = cx + 8, y = cy + 8;
+  if (x + 210 > ar.width) x = cx - 218;
+  if (y + 70 > ar.height) y = cy - 76;
+  aip.style.left = Math.max(4, x) + 'px'; aip.style.top = Math.max(4, y) + 'px';
+  const ain = document.getElementById('ain'); ain.value = ''; ain.focus();
+}
+function hideAddInput() { document.getElementById('aip').classList.remove('show'); document.getElementById('ain').value = ''; }
+
+// ── EVENTS ────────────────────────────────────────────
+document.querySelectorAll('.tab').forEach(t => {
+  t.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+    t.classList.add('active'); curMode = t.dataset.mode;
+    document.getElementById('hint').textContent = HINTS[curMode];
+    document.getElementById('mi').placeholder = PH[curMode];
+    renderPresets(curMode);
+  });
+});
+document.getElementById('gbtn').addEventListener('click', () => {
+  const v = document.getElementById('mi').value.trim();
+  if (!v) { document.getElementById('mi').focus(); return; }
+  generateMap(v);
+});
+document.getElementById('mi').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('gbtn').click(); });
+document.getElementById('clbtn').addEventListener('click', clearAll);
+document.getElementById('mbe').addEventListener('click', () => { if (selNode) expandNode(selNode); });
+document.getElementById('mbd').addEventListener('click', () => { if (selNode) deleteNode(selNode); });
+document.getElementById('bzi').addEventListener('click', () => svg.transition().duration(250).call(zb.scaleBy, 1.3));
+document.getElementById('bzo').addEventListener('click', () => svg.transition().duration(250).call(zb.scaleBy, 0.77));
+document.getElementById('bff').addEventListener('click', fitView);
+document.getElementById('bexp').addEventListener('click', exportPNG);
+document.getElementById('aok').addEventListener('click', () => { const v = document.getElementById('ain').value.trim(); if (v) addManualNode(v, addNodePos.x, addNodePos.y); });
+document.getElementById('acn').addEventListener('click', hideAddInput);
+document.getElementById('ain').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { const v = e.target.value.trim(); if (v) addManualNode(v, addNodePos.x, addNodePos.y); }
+  if (e.key === 'Escape') hideAddInput();
+});
+window.addEventListener('resize', () => {
+  const a = document.getElementById('ga'); const W = a.clientWidth, H = a.clientHeight;
+  svg.attr('width', W).attr('height', H);
+  if (sim) sim.force('center', d3.forceCenter(W / 2, H / 2)).alpha(0.1).restart();
+});
+
+// ── INIT ──────────────────────────────────────────────
+initGraph();
+renderPresets('single');
+</script>
+</body>
+</html>
